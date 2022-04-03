@@ -3,12 +3,33 @@ const app = express()
 const cors = require('cors')
 const db = require('./db_connection')
 app.use(express.json())
+const jwt = require('jsonwebtoken')
 
 
 
 app.use(cors({
     origin: 'http://localhost:3000'
 }))
+
+
+const jwtmiddleware = (req, res, next) => {
+    try {
+
+        const token = req.headers["x-access-token"]
+        //token=token.split(" ")[1]
+        const data = jwt.verify(token, 'secretkey123')
+        next()
+    }
+    catch (err) {
+        console.log(err);
+        res.json({
+            statusCode: 401,
+            status: false,
+            message: " You are not AUTHORIZED...Token validation failed........please login"
+        })
+    }
+
+}
 
 //admin functions
 app.post("/login", (req, res) => {
@@ -17,14 +38,19 @@ app.post("/login", (req, res) => {
         console.log(user);
         if (user) {
             if (user.deleted == true) {
-                res.send({ message: "user blocked" })
+             res.send({ message: "user blocked" })
             } else {
 
                 if (password == user.password) {
+                    const token = jwt.sign({
+                        currentUser: username
+                    }, 'secretkey123')
+                    console.log(token);
 
                     res.json({
                         Status: 200,
                         message: "login successfull",
+                        token
 
                     })
                     // res.send(user)
@@ -46,7 +72,7 @@ app.post("/login", (req, res) => {
 })
 
 
-app.post("/adduser", (req, res) => {
+app.post("/adduser",jwtmiddleware, (req, res) => {
     const { username, date_of_birth, age, email, emp_id, password, category, designation, mobile_number, department } = req.body
     db.Employee.findOne({ emp_id }).then(user => {
         if (user) {
@@ -136,6 +162,9 @@ app.post("/delete", (req, res) => {
             db.User.findOneAndUpdate({ emp_id }, { $set: { deleted: true } }).then(data => {
                 data.save()
             })
+            db.Employee.findOneAndUpdate({ emp_id }, { $set: { deleted: true } }).then(data => {
+                data.save()
+            })
             res.send("user deleted")
         }
     })
@@ -161,9 +190,9 @@ app.put("/edituser", (req, res) => {
             })
 })
 
-app.post("/leaveapproval", (req, res) => {
+app.post("/leaveapproval", jwtmiddleware,(req, res) => {
     const { emp_id, from_date, to_date, days, reason, status } = req.body
-    db.Leave.findOne({ emp_id }).then(result => {
+    db.Leave.findOne({ emp_id ,from_date, to_date, days, reason}).then(result => {
         if (result) {
             if (result.status == "pending" || "rejected") {
 
@@ -180,9 +209,9 @@ app.post("/leaveapproval", (req, res) => {
         }
     })
 })
-app.post("/leaverejection", (req, res) => {
+app.post("/leaverejection",jwtmiddleware, (req, res) => {
     const { emp_id, from_date, to_date, days, reason, status } = req.body
-    db.Leave.findOne({ emp_id }).then(result => {
+    db.Leave.findOne({ emp_id               ,from_date, to_date, days, reason }).then(result => {
         if (result) {
             if (result.status == "pending" || "approved") {
 
@@ -210,18 +239,27 @@ app.post("/applications", (req, res) => {
 
 // // employee functionalities
 
-app.post("/mydetails", (req, res) => {
+app.post("/mydetails",jwtmiddleware, (req, res) => {
     const { emp_id } = req.body
-    db.Employee.findOne({ emp_id }).then(user => {
+  db.Employee.findOne({ emp_id }).then(user => {
+      if(user.deleted === true){
+          res.send({message:"user terminated....cannot perform this action"})
+      }else{
         res.send(user)
+      }
+        
     })
 })
 
 
-app.put("/editmydetails", (req, res) => {
+app.put("/editmydetails", jwtmiddleware, (req, res) => {
     const { username, emp_id, email, mobile_number } = req.body
     db.Employee.findOneAndUpdate({ emp_id: emp_id }, { $set: { email, mobile_number } }).then(user => {
-        res.send({ message: "your data updated successfully" })
+        if(user.deleted === true){
+            res.send({message:"user terminated....cannot perform this action"})
+        }else{
+          res.send({ message: "your data updated successfully" })
+        }
     })
 })
 
@@ -232,11 +270,11 @@ app.post("/leavelist", (req, res) => {
     })
 })
 
-app.post("/leaverequest", (req, res) => {
+app.post("/leaverequest",jwtmiddleware, (req, res) => {
     const { emp_id, from_date, to_date, days, reason } = req.body
     db.Leave.findOne({ emp_id, from_date, to_date, days, reason }).then(result => {
         if (result) {
-            res.send({ message: "already requst leave on this date" })
+            res.send({ message: "already applied leave on this date" })
         } else {
             const leave = new db.Leave({
                 emp_id,

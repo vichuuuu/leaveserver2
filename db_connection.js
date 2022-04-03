@@ -24,10 +24,10 @@ const Employee=mongoose.model("Employee",{
     deleted:{
         type:Boolean,
         default:false
-    }
+    },
     // department_id:{
     //     type:mongoose.Types.ObjectId,
-    //     ref:Department
+    //     ref:"Department"
     // }
 })
 
